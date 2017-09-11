@@ -7,6 +7,7 @@
 ssize_t getcommand(char **lineptr, size_t *n);
 int parsecommand(char *line, char ***commands, size_t *num);
 int executecommand(char **commands, int pipe);
+int executepipe(char **commands, int n_pipe);
 
 int runshell() {
         char *line = NULL;
@@ -108,11 +109,11 @@ int parsecommand(char *line, char ***commands, size_t *num) {
         return n;
 }
 
-int executecommand(char **commands, int pipe) {
-        if (pipe == 1) {
+int executecommand(char **commands, int n_pipe) {
+        if (n_pipe == 1) {
                 if (strcmp(commands[0], "cd") == 0) {
                         if (commands[1] && chdir(commands[1]) < 0) {
-                                printf("chdir error: %s\n", strerror(errno));
+                                fprintf(stderr, "chdir error: %s\n", strerror(errno));
                         }
                 }
                 else if (strcmp(commands[0], "exit") == 0) {
@@ -124,20 +125,94 @@ int executecommand(char **commands, int pipe) {
                 else {
                         pid_t pid = fork();
                         if (pid < 0) { // fork failed
-                                printf("fork error: %s\n", strerror(errno));
+                                fprintf(stderr, "fork error: %s\n", strerror(errno));
                         }
                         else if (pid == 0) { // child process
                                 if (execve(commands[0], commands, NULL) < 0) {
-                                        printf("execve error: %s\n", strerror(errno));
+                                        fprintf(stderr, "execve error: %s\n", strerror(errno));
+                                        // exit the child process
                                 }
                         }
                         else { // parent process
                                 int status;
                                 if (waitpid(pid, &status, 0) < 0) {
-                                        printf("waitpid error: %s\n", strerror(errno));
+                                        fprintf(stderr, "waitpid error: %s\n", strerror(errno));
                                 }
                         }
                 }
+        }
+        else {
+                return executepipe(commands, n_pipe);
+        }
+        return 0;
+}
+
+int executepipe(char **commands, int n_pipe) {
+        int cmd = 0;
+        int idx = 0;
+        int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
+        if (pipefd == NULL) {
+                return -1;
+        }
+        while (cmd < n_pipe) {
+                if (cmd < n_pipe - 1) {
+                        pipe(pipefd + cmd * 2);
+                }
+                if (strcmp(commands[idx], "cd") == 0) {
+                        if (commands[idx + 1] && chdir(commands[idx + 1]) < 0) {
+                                fprintf(stderr, "chdir error: %s\n", strerror(errno));
+                        }
+                        if (cmd > 0) {
+                                close(pipefd[(cmd - 1) * 2]);
+                        }
+                }
+                else if (strcmp(commands[idx], "exit") == 0) {
+                        if (cmd > 0) {
+                                close(pipefd[(cmd - 1) * 2]);
+                        }
+                        return 1;
+                }
+                else if (strcmp(commands[idx], "history") == 0) {
+
+                }
+                else {
+                        pid_t pid = fork();
+                        if (pid < 0) {
+                                fprintf(stderr, "fork error: %s\n", strerror(errno));
+                        }
+                        else if (pid == 0) { // child process
+                                if (cmd < n_pipe - 1) {
+                                        dup2(pipefd[cmd * 2 + 1], 1);
+                                        close(pipefd[cmd * 2]);
+                                        close(pipefd[cmd * 2 + 1]);
+                                }
+                                if (cmd > 0) {
+                                        dup2(pipefd[(cmd - 1) * 2], 0);
+                                        close(pipefd[(cmd - 1) * 2]);
+                                }
+                                if (execve(commands[idx], commands + idx, NULL) < 0) {
+                                        fprintf(stderr, "execve error: %s\n", strerror(errno));
+                                        return 1;
+                                }
+                        }
+                        else { // parent process
+                                if (cmd < n_pipe - 1) {
+                                        close(pipefd[cmd * 2 + 1]);
+                                }
+                                if (cmd > 0) {
+                                        close(pipefd[(cmd - 1) * 2]);
+                                }
+                                int status;
+                                if (waitpid(pid, &status, 0) < 0) {
+                                        fprintf(stderr, "waitpid error: %s\n", strerror(errno));
+                                }
+                        }
+                }
+                while (commands[idx] != NULL) {
+                        ++idx;
+                }
+                ++idx;
+                ++cmd;
         }
         return 0;
 }
