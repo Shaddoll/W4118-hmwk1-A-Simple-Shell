@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
 
 ssize_t getcommand(char **lineptr, size_t *n);
 int parsecommand(char *line, char ***commands, size_t *num);
+int executecommand(char **commands, int pipe);
 
 int runshell() {
         char *line = NULL;
@@ -15,9 +18,12 @@ int runshell() {
                 }
                 size_t num = 10;
                 char **commands = malloc(num * sizeof(char*));
-                int r = parsecommand(line, &commands, &num);
-                if (r == -1) { // error
-
+                int pipe = parsecommand(line, &commands, &num);
+                if (pipe > 0) { // error
+                        int r = executecommand(commands, pipe);
+                        if (r > 0) {
+                            break;
+                        }
                 }
 
         }
@@ -96,9 +102,42 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                 //    break;
                 //}
         }
-        return ++n;
+        if (i > 0) {
+                ++n;
+        }
+        return n;
 }
 
 int executecommand(char **commands, int pipe) {
+        if (pipe == 1) {
+                if (strcmp(commands[0], "cd") == 0) {
+                        if (commands[1] && chdir(commands[1]) < 0) {
+                                printf("chdir error: %s\n", strerror(errno));
+                        }
+                }
+                else if (strcmp(commands[0], "exit") == 0) {
+                        return 1;
+                }
+                else if (strcmp(commands[0], "history") == 0) {
 
+                }
+                else {
+                        pid_t pid = fork();
+                        if (pid < 0) { // fork failed
+                                printf("fork error: %s\n", strerror(errno));
+                        }
+                        else if (pid == 0) { // child process
+                                if (execve(commands[0], commands, NULL) < 0) {
+                                        printf("execve error: %s\n", strerror(errno));
+                                }
+                        }
+                        else { // parent process
+                                int status;
+                                if (waitpid(pid, &status, 0) < 0) {
+                                        printf("waitpid error: %s\n", strerror(errno));
+                                }
+                        }
+                }
+        }
+        return 0;
 }
