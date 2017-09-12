@@ -11,7 +11,7 @@ struct Queue {
         int size;
 };
 
-void initqueue(Queue* q) {
+void initqueue(Queue *q) {
         int i;
         for (i = 0; i < MAXLENGTH + 1; ++i) {
                 q->pool[i] = NULL;
@@ -21,7 +21,7 @@ void initqueue(Queue* q) {
         q->size = 0;
 }
 
-void clearqueue(Queue* q) {
+void clearqueue(Queue *q) {
         int i;
         for (i = q->start; i < q->end; ++i) {
                 free(q->pool[i]);
@@ -35,7 +35,7 @@ void clearqueue(Queue* q) {
         q->size = 0;
 }
 
-int enqueue(Queue* q, char *str) {
+int enqueue(Queue *q, char *str) {
         if (q->size == MAXLENGTH) {
                 return -1;
         }
@@ -49,7 +49,7 @@ int enqueue(Queue* q, char *str) {
         return ++q->size;
 }
 
-int dequeue(Queue* q) {
+int dequeue(Queue *q) {
         if (q->size == 0) {
                 return -1;
         }
@@ -59,9 +59,17 @@ int dequeue(Queue* q) {
         return --q->size;
 }
 
-char *queryqueue(Queue* q, int index) {
+char *queryqueue(const Queue *q, int index) {
         if (index >= q->size) {
                 return NULL;
         }
         return q->pool[(q->start + index) % (MAXLENGTH + 1)];
+}
+
+int queuesize(const Queue *q) {
+        return q->size;
+}
+
+int queuefull(const Queue *q) {
+    return q->size == MAXLENGTH;
 }

@@ -3,11 +3,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include "queue.h"
+
+Queue hist;
 
 ssize_t getcommand(char **lineptr, size_t *n);
 int parsecommand(char *line, char ***commands, size_t *num);
 int executecommand(char **commands, int pipe);
 int executepipe(char **commands, int n_pipe);
+void history(char **argv, int fd);
+void updatehistory(char *str);
 
 int runshell() {
         char *line = NULL;
@@ -21,6 +26,7 @@ int runshell() {
                 char **commands = malloc(num * sizeof(char*));
                 int pipe = parsecommand(line, &commands, &num);
                 if (pipe > 0) { // error
+                        updatehistory(line);
                         int r = executecommand(commands, pipe);
                         if (r > 0) {
                             break;
@@ -215,4 +221,35 @@ int executepipe(char **commands, int n_pipe) {
                 ++cmd;
         }
         return 0;
+}
+
+void history(char **argv, int fd) {
+        if (argv[1] == NULL) {
+                int i, qsize = queuesize(&hist);
+                FILE *fpout = fdopen(fd, "w");
+                if (fpout == NULL) {
+                        fprintf(stderr, "error: %s\n", strerror(errno));
+                        return;
+                }
+                for (i = 0; i < qsize; ++i) {
+                        fprintf(fpout, "%d %s\n", i, queryqueue(&hist, i));
+                }
+                if (fclose(fpout) < 0) {
+                        fprintf(stderr, "error: %s\n", strerror(errno));
+                        return;
+                }
+        }
+        else if (strcmp(argv[1], "-c")) {
+                clearqueue(&hist);
+        }
+        else {
+
+        }
+}
+
+void updatehistory(char *str) {
+        if (queuefull(&hist)) {
+                dequeue(&hist);
+        }
+        enqueue(&hist, str);
 }

@@ -3,10 +3,11 @@
 
 typedef struct Queue Queue;
 
-void initqueue(Queue* q);
-void clearqueue(Queue* q);
-int enqueue(Queue* q, char *str);
-int dequeue(Queue* q);
-char* queryqueue(Queue* q, int index);
-
+void initqueue(Queue *q);
+void clearqueue(Queue *q);
+int enqueue(Queue *q, char *str);
+int dequeue(Queue *q);
+char *queryqueue(const Queue *q, int index);
+int queuesize(const Queue *q);
+int queuefull(const Queue *q);
 #endif
