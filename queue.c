@@ -2,15 +2,6 @@
 #include <string.h>
 #include "queue.h"
 
-#define MAXLENGTH 100
-
-struct Queue {
-        char *pool[MAXLENGTH + 1];
-        int start;
-        int end;
-        int size;
-};
-
 void initqueue(Queue *q) {
         int i;
         for (i = 0; i < MAXLENGTH + 1; ++i) {
@@ -60,7 +51,7 @@ int dequeue(Queue *q) {
 }
 
 char *queryqueue(const Queue *q, int index) {
-        if (index >= q->size) {
+        if (index >= q->size || index < 0) {
                 return NULL;
         }
         return q->pool[(q->start + index) % (MAXLENGTH + 1)];

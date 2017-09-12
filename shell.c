@@ -5,36 +5,45 @@
 #include <errno.h>
 #include "queue.h"
 
-Queue hist;
+Queue g_Hist;
+int g_Switch;
 
 ssize_t getcommand(char **lineptr, size_t *n);
 int parsecommand(char *line, char ***commands, size_t *num);
 int executecommand(char **commands, int pipe);
-int executepipe(char **commands, int n_pipe);
+int executepipe(char **commands, int n_pipe, int outfd);
 void history(char **argv, int fd);
 void updatehistory(char *str);
+int str2number(char *str);
 
 int runshell() {
         char *line = NULL;
         size_t len = 0;
-        while(1) {
+        size_t num = 5;
+        char **commands = malloc(num * sizeof(char*));
+        memset(commands, 0, num * sizeof(char*));
+        initqueue(&g_Hist);
+        g_Switch = 1;
+        while(g_Switch) {
                 ssize_t nread = getcommand(&line, &len);
-                if (nread == -1) { // error
-
+                if (nread < 0) { // error
+                        fprintf(stderr, "error: %s\n", strerror(errno));
+                        fflush(stdin);
+                        continue;
                 }
-                size_t num = 10;
-                char **commands = malloc(num * sizeof(char*));
-                int pipe = parsecommand(line, &commands, &num);
-                if (pipe > 0) { // error
+                int n_pipe = parsecommand(line, &commands, &num);
+                if (n_pipe > 0) { // error
                         updatehistory(line);
-                        int r = executecommand(commands, pipe);
-                        if (r > 0) {
-                            break;
-                        }
+                        executepipe(commands, n_pipe, 1);
+                }
+                for (int i = 0; i < num; ++i) {
+                        free(commands[i]);
+                        commands[i] = NULL;
                 }
 
         }
         free(line);
+        free(commands);
         return 0;
 }
 
@@ -52,6 +61,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
         }
         if (*p == '|') {
                 // parse error
+                fprintf(stderr, "error: %s\n", "pipe error");
                 return -1;
         }
         while(*p != '\n') {
@@ -62,6 +72,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                 (*commands)[i] = malloc(q - p + 1);
                 if ((*commands)[i] == NULL) {
                     // malloc error
+                    fprintf(stderr, "error: %s\n", strerror(errno));
                     return -1;
                 }
                 strncpy((*commands)[i], p, q - p);
@@ -70,6 +81,8 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         *num *= 2;
                         char **temp = realloc(*commands, *num * sizeof(char**));
                         if (temp == NULL) {
+                                //realloc error
+                                fprintf(stderr, "error: %s\n", strerror(errno));
                                 return -1;
                         }
                         *commands = temp;
@@ -82,7 +95,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                 if (*q == '|') {
                         ++n;
                         (*commands)[i++] = NULL;
-                        if (i >= *num) {
+                        if (i >= *num - 1) {
                                 *num *= 2;
                                 char **temp = realloc(*commands, *num * sizeof(char**));
                                 if (temp == NULL) {
@@ -98,23 +111,22 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         if (*p == '\n') {
                                 // pipeline without next command
                                 // error
+                                fprintf(stderr, "error: %s\n", "pipe error");
                                 return -1;
                         }
                         else if (*p == '|') {
                                 // error
+                                fprintf(stderr, "error: %s\n", "pipe error");
                                 return -1;
                         }
                 }
-                //else if (*q == '\n') {
-                //    break;
-                //}
         }
         if (i > 0) {
                 ++n;
         }
         return n;
 }
-
+/*
 int executecommand(char **commands, int n_pipe) {
         if (n_pipe == 1) {
                 if (strcmp(commands[0], "cd") == 0) {
@@ -151,13 +163,14 @@ int executecommand(char **commands, int n_pipe) {
                 return executepipe(commands, n_pipe);
         }
         return 0;
-}
+}*/
 
-int executepipe(char **commands, int n_pipe) {
+int executepipe(char **commands, int n_pipe, int outfd) {
         int cmd = 0;
         int idx = 0;
         int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
         if (pipefd == NULL) {
+                fprintf(stderr, "error: %s\n", strerror(errno));
                 return -1;
         }
         while (cmd < n_pipe) {
@@ -176,10 +189,20 @@ int executepipe(char **commands, int n_pipe) {
                         if (cmd > 0) {
                                 close(pipefd[(cmd - 1) * 2]);
                         }
+                        g_Switch = 0;
                         return 1;
                 }
                 else if (strcmp(commands[idx], "history") == 0) {
-
+                        if (cmd > 0) {
+                                close(pipefd[(cmd - 1) * 2]);
+                        }
+                        if (cmd < n_pipe - 1) {
+                                history(commands + idx, pipefd[2 * cmd + 1]);
+                                close(pipefd[2 * cmd + 1]);
+                        }
+                        else {
+                                history(commands + idx, outfd);
+                        }
                 }
                 else {
                         pid_t pid = fork();
@@ -191,6 +214,9 @@ int executepipe(char **commands, int n_pipe) {
                                         dup2(pipefd[cmd * 2 + 1], 1);
                                         close(pipefd[cmd * 2]);
                                         close(pipefd[cmd * 2 + 1]);
+                                }
+                                else {
+                                        dup2(outfd, 1);
                                 }
                                 if (cmd > 0) {
                                         dup2(pipefd[(cmd - 1) * 2], 0);
@@ -223,33 +249,61 @@ int executepipe(char **commands, int n_pipe) {
         return 0;
 }
 
-void history(char **argv, int fd) {
+void history(char **argv, int outfd) {
+        int offset;
         if (argv[1] == NULL) {
-                int i, qsize = queuesize(&hist);
-                FILE *fpout = fdopen(fd, "w");
-                if (fpout == NULL) {
-                        fprintf(stderr, "error: %s\n", strerror(errno));
-                        return;
-                }
+                int i, qsize = queuesize(&g_Hist);
                 for (i = 0; i < qsize; ++i) {
-                        fprintf(fpout, "%d %s\n", i, queryqueue(&hist, i));
-                }
-                if (fclose(fpout) < 0) {
-                        fprintf(stderr, "error: %s\n", strerror(errno));
-                        return;
+                        char *item = queryqueue(&g_Hist, i);
+                        char number[5];
+                        sprintf(number, "%d ", i);
+                        write(outfd, number, strlen(number));
+                        write(outfd, item, strlen(item));
                 }
         }
-        else if (strcmp(argv[1], "-c")) {
-                clearqueue(&hist);
+        else if (strcmp(argv[1], "-c") == 0) {
+                clearqueue(&g_Hist);
+        }
+        else if ((offset = str2number(argv[1])) >= 0){
+                char *item = queryqueue(&g_Hist, offset);
+                if (item == NULL) {
+                        fprintf(stderr, "error: %s\n", "invalid history offset");
+                        return;
+                }
+                size_t num = 5;
+                char **commands = malloc(num * sizeof(char*));
+                memset(commands, 0, num * sizeof(char*));
+                int n_pipe = parsecommand(item, &commands, &num);
+                if (n_pipe > 0) {
+                        executepipe(commands, n_pipe, outfd);
+                }
+                int i;
+                for (i = 0; i < num; ++i) {
+                        free(commands[i]);
+                        commands[i] = NULL;
+                }
+                free(commands);
         }
         else {
-
+                fprintf(stderr, "error: %s\n", "invalid argument");
         }
 }
 
 void updatehistory(char *str) {
-        if (queuefull(&hist)) {
-                dequeue(&hist);
+        if (queuefull(&g_Hist)) {
+                dequeue(&g_Hist);
         }
-        enqueue(&hist, str);
+        enqueue(&g_Hist, str);
+}
+
+int str2number(char *str) {
+        int num = 0;
+        char *p;
+        for (p = str; *p != '\0'; ++p) {
+                if (*p <= '0' || *p >= '9') {
+                        return -1;
+                }
+                num = num * 10 + *p - '0';
+        }
+        return num;
 }
