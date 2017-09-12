@@ -15,19 +15,24 @@ int executepipe(char **commands, int n_pipe, int outfd);
 void history(char **argv, int fd);
 void updatehistory(char *str);
 int str2number(char *str);
+int logerror(char *str);
 
 int runshell() {
         char *line = NULL;
         size_t len = 0;
         size_t num = 5;
         char **commands = malloc(num * sizeof(char*));
+        if (commands == NULL) {
+                logerror(strerror(errno));
+                return 1;
+        }
         memset(commands, 0, num * sizeof(char*));
         initqueue(&g_Hist);
         g_Switch = 1;
         while(g_Switch) {
                 ssize_t nread = getcommand(&line, &len);
                 if (nread < 0) { // error
-                        fprintf(stderr, "error: %s\n", strerror(errno));
+                        logerror(strerror(errno));
                         fflush(stdin);
                         continue;
                 }
@@ -61,7 +66,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
         }
         if (*p == '|') {
                 // parse error
-                fprintf(stderr, "error: %s\n", "pipe error");
+                logerror("syntax error near unexpected token `|`");
                 return -1;
         }
         while(*p != '\n') {
@@ -72,7 +77,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                 (*commands)[i] = malloc(q - p + 1);
                 if ((*commands)[i] == NULL) {
                     // malloc error
-                    fprintf(stderr, "error: %s\n", strerror(errno));
+                    logerror(strerror(errno));
                     return -1;
                 }
                 strncpy((*commands)[i], p, q - p);
@@ -82,7 +87,7 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         char **temp = realloc(*commands, *num * sizeof(char**));
                         if (temp == NULL) {
                                 //realloc error
-                                fprintf(stderr, "error: %s\n", strerror(errno));
+                                logerror(strerror(errno));
                                 return -1;
                         }
                         *commands = temp;
@@ -111,12 +116,12 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         if (*p == '\n') {
                                 // pipeline without next command
                                 // error
-                                fprintf(stderr, "error: %s\n", "pipe error");
+                                logerror("syntax error near unexpected token `|`");
                                 return -1;
                         }
                         else if (*p == '|') {
                                 // error
-                                fprintf(stderr, "error: %s\n", "pipe error");
+                                logerror("syntax error near unexpected token `|`");
                                 return -1;
                         }
                 }
@@ -170,7 +175,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
         int idx = 0;
         int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
         if (pipefd == NULL) {
-                fprintf(stderr, "error: %s\n", strerror(errno));
+                logerror(strerror(errno));
                 return -1;
         }
         while (cmd < n_pipe) {
@@ -179,7 +184,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                 }
                 if (strcmp(commands[idx], "cd") == 0) {
                         if (commands[idx + 1] && chdir(commands[idx + 1]) < 0) {
-                                fprintf(stderr, "chdir error: %s\n", strerror(errno));
+                                logerror(strerror(errno));
                         }
                         if (cmd > 0) {
                                 close(pipefd[(cmd - 1) * 2]);
@@ -207,7 +212,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                 else {
                         pid_t pid = fork();
                         if (pid < 0) {
-                                fprintf(stderr, "fork error: %s\n", strerror(errno));
+                                logerror(strerror(errno));
                         }
                         else if (pid == 0) { // child process
                                 if (cmd < n_pipe - 1) {
@@ -223,7 +228,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                                         close(pipefd[(cmd - 1) * 2]);
                                 }
                                 if (execve(commands[idx], commands + idx, NULL) < 0) {
-                                        fprintf(stderr, "execve error: %s\n", strerror(errno));
+                                        logerror(strerror(errno));
                                         return 1;
                                 }
                         }
@@ -236,7 +241,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                                 }
                                 int status;
                                 if (waitpid(pid, &status, 0) < 0) {
-                                        fprintf(stderr, "waitpid error: %s\n", strerror(errno));
+                                        logerror(strerror(errno));
                                 }
                         }
                 }
@@ -267,11 +272,15 @@ void history(char **argv, int outfd) {
         else if ((offset = str2number(argv[1])) >= 0){
                 char *item = queryqueue(&g_Hist, offset);
                 if (item == NULL) {
-                        fprintf(stderr, "error: %s\n", "invalid history offset");
+                        logerror("invalid history offset");
                         return;
                 }
                 size_t num = 5;
                 char **commands = malloc(num * sizeof(char*));
+                if (commands == NULL) {
+                        logerror(strerror(errno));
+                        return;
+                }
                 memset(commands, 0, num * sizeof(char*));
                 int n_pipe = parsecommand(item, &commands, &num);
                 if (n_pipe > 0) {
@@ -285,7 +294,7 @@ void history(char **argv, int outfd) {
                 free(commands);
         }
         else {
-                fprintf(stderr, "error: %s\n", "invalid argument");
+                logerror("invalid argument");
         }
 }
 
@@ -306,4 +315,8 @@ int str2number(char *str) {
                 num = num * 10 + *p - '0';
         }
         return num;
+}
+
+int logerror(char *str) {
+    return fprintf(stderr, "error: %s\n", str);
 }
