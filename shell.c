@@ -5,8 +5,10 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include "queue.h"
+#include "graph.h"
 
 Queue g_Hist;
+Graph g_Edge;
 int g_Switch;
 
 ssize_t getcommand(char **lineptr, size_t *n);
@@ -15,6 +17,7 @@ int executecommand(char **commands, int pipe);
 int executepipe(char **commands, int n_pipe, int outfd);
 void concurrentpipe(char **commands, int n_pipe, int outfd);
 void history(char **argv, int fd);
+int checkrecursion(char **commands, int n_pipe);
 void updatehistory(char *str);
 int str2number(char *str);
 int logerror(char *str);
@@ -30,6 +33,7 @@ int runshell() {
         }
         memset(commands, 0, num * sizeof(char*));
         initqueue(&g_Hist);
+        initgraph(&g_Edge);
         g_Switch = 1;
         while(g_Switch) {
                 ssize_t n_read;
@@ -44,7 +48,12 @@ int runshell() {
                 if (n_pipe > 0) {
                         updatehistory(line);
                         //executepipe(commands, n_pipe, 1);
-                        concurrentpipe(commands, n_pipe, 1);
+                        if (checkrecursion(commands, n_pipe)) {
+                                logerror("infinite recursion");
+                        }
+                        else {
+                                concurrentpipe(commands, n_pipe, 1);
+                        }
                 }
                 for (i = 0; i < num; ++i) {
                         free(commands[i]);
@@ -406,9 +415,30 @@ void history(char **argv, int outfd) {
         }
 }
 
+int checkrecursion(char **commands, int n_pipe) {
+        int vertex = queuesize(&g_Hist) - 1;
+        int cmd = 0;
+        int idx = 0;
+        int offset;
+        while (cmd < n_pipe) {
+                if (strcmp(commands[idx], "history") == 0) {
+                        if (commands[idx + 1] && (offset = str2number(commands[idx + 1])) >= 0) {
+                                setedge(&g_Edge, vertex, offset);
+                        }
+                }
+                while (commands[idx] != NULL) {
+                        ++idx;
+                }
+                ++idx;
+                ++cmd;
+        }
+        return checkcycle(&g_Edge, vertex);
+}
+
 void updatehistory(char *str) {
         if (queuefull(&g_Hist)) {
                 dequeue(&g_Hist);
+                shiftvertex(&g_Edge);
         }
         enqueue(&g_Hist, str);
 }
