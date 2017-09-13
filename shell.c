@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/wait.h>
 #include "queue.h"
 
 Queue g_Hist;
@@ -30,18 +31,20 @@ int runshell() {
         initqueue(&g_Hist);
         g_Switch = 1;
         while(g_Switch) {
-                ssize_t nread = getcommand(&line, &len);
-                if (nread < 0) { // error
+                ssize_t n_read;
+                int n_pipe, i;
+                n_read = getcommand(&line, &len);
+                if (n_read < 0) { // error
                         logerror(strerror(errno));
                         fflush(stdin);
                         continue;
                 }
-                int n_pipe = parsecommand(line, &commands, &num);
+                n_pipe = parsecommand(line, &commands, &num);
                 if (n_pipe > 0) { // error
                         updatehistory(line);
                         executepipe(commands, n_pipe, 1);
                 }
-                for (int i = 0; i < num; ++i) {
+                for (i = 0; i < num; ++i) {
                         free(commands[i]);
                         commands[i] = NULL;
                 }
@@ -183,8 +186,13 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                         pipe(pipefd + cmd * 2);
                 }
                 if (strcmp(commands[idx], "cd") == 0) {
-                        if (commands[idx + 1] && chdir(commands[idx + 1]) < 0) {
-                                logerror(strerror(errno));
+                        if (commands[idx + 1]) {
+                                if (chdir(commands[idx + 1]) < 0) {
+                                        logerror(strerror(errno));
+                                }
+                        }
+                        else {
+                                logerror("no argument");
                         }
                         if (cmd > 0) {
                                 close(pipefd[(cmd - 1) * 2]);
@@ -229,6 +237,7 @@ int executepipe(char **commands, int n_pipe, int outfd) {
                                 }
                                 if (execve(commands[idx], commands + idx, NULL) < 0) {
                                         logerror(strerror(errno));
+                                        g_Switch = 0;
                                         return 1;
                                 }
                         }
@@ -309,7 +318,7 @@ int str2number(char *str) {
         int num = 0;
         char *p;
         for (p = str; *p != '\0'; ++p) {
-                if (*p <= '0' || *p >= '9') {
+                if (*p < '0' || *p > '9') {
                         return -1;
                 }
                 num = num * 10 + *p - '0';
