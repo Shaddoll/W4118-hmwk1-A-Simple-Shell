@@ -30,7 +30,7 @@ int enqueue(Queue *q, char *str) {
         if (q->size == MAXLENGTH) {
                 return -1;
         }
-        size_t len = strlen(str);
+        size_t len = strlen(str) + 1;
         q->pool[q->end] = malloc(len * sizeof(char));
         if (q->pool[q->end] == NULL) {
                 return -1;

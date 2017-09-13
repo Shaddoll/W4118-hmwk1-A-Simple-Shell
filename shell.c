@@ -13,6 +13,7 @@ ssize_t getcommand(char **lineptr, size_t *n);
 int parsecommand(char *line, char ***commands, size_t *num);
 int executecommand(char **commands, int pipe);
 int executepipe(char **commands, int n_pipe, int outfd);
+void concurrentpipe(char **commands, int n_pipe, int outfd);
 void history(char **argv, int fd);
 void updatehistory(char *str);
 int str2number(char *str);
@@ -40,9 +41,10 @@ int runshell() {
                         continue;
                 }
                 n_pipe = parsecommand(line, &commands, &num);
-                if (n_pipe > 0) { // error
+                if (n_pipe > 0) {
                         updatehistory(line);
-                        executepipe(commands, n_pipe, 1);
+                        //executepipe(commands, n_pipe, 1);
+                        concurrentpipe(commands, n_pipe, 1);
                 }
                 for (i = 0; i < num; ++i) {
                         free(commands[i]);
@@ -52,6 +54,7 @@ int runshell() {
         }
         free(line);
         free(commands);
+        clearqueue(&g_Hist);
         return 0;
 }
 
@@ -64,12 +67,13 @@ int parsecommand(char *line, char ***commands, size_t *num) {
         int n = 0;
         int i = 0;
         char *p = line;
+        char *syntaxerr = "syntax error near unexpected token `|`";
         while(*p == ' ') {
                 ++p;
         }
         if (*p == '|') {
                 // parse error
-                logerror("syntax error near unexpected token `|`");
+                logerror(syntaxerr);
                 return -1;
         }
         while(*p != '\n') {
@@ -86,15 +90,16 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                 strncpy((*commands)[i], p, q - p);
                 (*commands)[i++][q - p] = '\0';
                 if (i >= *num - 1) {
-                        *num *= 2;
-                        char **temp = realloc(*commands, *num * sizeof(char**));
+                        char **temp;
+                        temp = realloc(*commands, *num * 2 * sizeof(char**));
                         if (temp == NULL) {
                                 //realloc error
                                 logerror(strerror(errno));
                                 return -1;
                         }
+                        memset(temp + *num, 0, *num * sizeof(char**));
                         *commands = temp;
-                        memset(*commands + *num / 2, 0, *num * sizeof(char**) / 2);
+                        *num *= 2;
                 }
                 while(*q == ' ') {
                         ++q;
@@ -104,13 +109,14 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         ++n;
                         (*commands)[i++] = NULL;
                         if (i >= *num - 1) {
-                                *num *= 2;
-                                char **temp = realloc(*commands, *num * sizeof(char**));
+                                char **temp;
+                                temp = realloc(*commands, *num * 2 * sizeof(char**));
                                 if (temp == NULL) {
                                         return -1;
                                 }
+                                memset(temp + *num, 0, *num * sizeof(char**));
                                 *commands = temp;
-                                memset(*commands + *num / 2, 0, *num * sizeof(char**) / 2);
+                                *num *= 2;
                         }
                         p = q + 1;
                         while(*p == ' ') {
@@ -119,12 +125,12 @@ int parsecommand(char *line, char ***commands, size_t *num) {
                         if (*p == '\n') {
                                 // pipeline without next command
                                 // error
-                                logerror("syntax error near unexpected token `|`");
+                                logerror(syntaxerr);
                                 return -1;
                         }
                         else if (*p == '|') {
                                 // error
-                                logerror("syntax error near unexpected token `|`");
+                                logerror(syntaxerr);
                                 return -1;
                         }
                 }
@@ -263,6 +269,98 @@ int executepipe(char **commands, int n_pipe, int outfd) {
         return 0;
 }
 
+void concurrentpipe(char **commands, int n_pipe, int outfd) {
+        int cmd = 0;
+        int idx = 0;
+        int i, status;
+        pid_t *pids;
+        int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
+        if (pipefd == NULL) {
+                logerror(strerror(errno));
+                return;
+        }
+        for (i = 0; i < n_pipe - 1; ++i) {
+                pipe(pipefd + 2 * i);
+        }
+        pids = malloc(n_pipe * sizeof(pid_t));
+        if (pids == NULL) {
+                free(pipefd);
+                logerror(strerror(errno));
+                return;
+        }
+        memset(pids, 0, n_pipe * sizeof(pid_t));
+        while (cmd < n_pipe) {
+                if (strcmp(commands[idx], "cd") == 0) {
+                        if (commands[idx + 1]) {
+                                if (chdir(commands[idx + 1]) < 0) {
+                                        logerror(strerror(errno));
+                                }
+                        }
+                        else {
+                                logerror("no argument");
+                        }
+                }
+                else if (strcmp(commands[idx], "exit") == 0) {
+                        g_Switch = 0;
+                        free(pipefd);
+                        free(pids);
+                        return;
+                }
+                else if (strcmp(commands[idx], "history") == 0) {
+                        if (cmd < n_pipe - 1) {
+                                history(commands + idx, pipefd[2 * cmd + 1]);
+                        }
+                        else {
+                                history(commands + idx, outfd);
+                        }
+                }
+                else {
+                        pids[cmd] = fork();
+                        if (pids[cmd] < 0) {
+                                logerror(strerror(errno));
+                        }
+                        else if (pids[cmd] == 0) { // child process
+                                if (cmd < n_pipe - 1) {
+                                        dup2(pipefd[cmd * 2 + 1], 1);
+                                }
+                                else {
+                                        dup2(outfd, 1);
+                                }
+                                if (cmd > 0) {
+                                        dup2(pipefd[(cmd - 1) * 2], 0);
+                                }
+                                for (i = 0; i < 2 * (n_pipe - 1); ++i) {
+                                        close(pipefd[i]);
+                                }
+                                if (execve(commands[idx], commands + idx, NULL) < 0) {
+                                        logerror(strerror(errno));
+                                        g_Switch = 0;
+                                        free(pipefd);
+                                        free(pids);
+                                        return;
+                                }
+                        }
+                }
+                while (commands[idx] != NULL) {
+                        ++idx;
+                }
+                ++idx;
+                ++cmd;
+        }
+        for (i = 0; i < 2 * (n_pipe - 1); ++i) {
+                close(pipefd[i]);
+        }
+        free(pipefd);
+        pipefd = NULL;
+        for (i = 0; i < n_pipe; ++i) {
+                if (pids[n_pipe - 1 - i] > 0 && waitpid(pids[n_pipe - 1 - i], &status, 0) < 0) {
+                        logerror(strerror(errno));
+                }
+        }
+        free(pids);
+        pids = NULL;
+}
+
 void history(char **argv, int outfd) {
         int offset;
         if (argv[1] == NULL) {
@@ -293,7 +391,8 @@ void history(char **argv, int outfd) {
                 memset(commands, 0, num * sizeof(char*));
                 int n_pipe = parsecommand(item, &commands, &num);
                 if (n_pipe > 0) {
-                        executepipe(commands, n_pipe, outfd);
+                        //executepipe(commands, n_pipe, outfd);
+                        concurrentpipe(commands, n_pipe, outfd);
                 }
                 int i;
                 for (i = 0; i < num; ++i) {
