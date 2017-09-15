@@ -10,6 +10,10 @@ void initgraph(Graph *g) {
         g->start = 0;
 }
 
+void cleargraph(Graph *g) {
+        initgraph(g);
+}
+
 void shiftvertex(Graph *g) {
         int i;
         for (i = 0; i < MAXVERTEX; ++i) {

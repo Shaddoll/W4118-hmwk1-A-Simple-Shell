@@ -9,6 +9,7 @@ typedef struct Graph {
 } Graph;
 
 void initgraph(Graph *g);
+void cleargraph(Graph *g);
 void shiftvertex(Graph *g);
 void setedge(Graph *g, int from, int to);
 int checkcycle(const Graph *g, int vertex);

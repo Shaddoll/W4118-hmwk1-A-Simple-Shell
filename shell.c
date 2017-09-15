@@ -362,7 +362,7 @@ void concurrentpipe(char **commands, int n_pipe, int outfd) {
         free(pipefd);
         pipefd = NULL;
         for (i = 0; i < n_pipe; ++i) {
-                if (pids[n_pipe - 1 - i] > 0 && waitpid(pids[n_pipe - 1 - i], &status, 0) < 0) {
+                if (pids[i] > 0 && waitpid(pids[i], &status, 0) < 0) {
                         logerror(strerror(errno));
                 }
         }
@@ -384,6 +384,7 @@ void history(char **argv, int outfd) {
         }
         else if (strcmp(argv[1], "-c") == 0) {
                 clearqueue(&g_Hist);
+                cleargraph(&g_Edge);
         }
         else if ((offset = str2number(argv[1])) >= 0){
                 char *item = queryqueue(&g_Hist, offset);
