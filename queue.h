@@ -4,10 +4,10 @@
 #define MAXLENGTH 100
 
 typedef struct Queue {
-        char *pool[MAXLENGTH + 1];
-        int start;
-        int end;
-        int size;
+	char *pool[MAXLENGTH + 1];
+	int start;
+	int end;
+	int size;
 } Queue;
 
 void initqueue(Queue *q);

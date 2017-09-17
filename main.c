@@ -1,5 +1,6 @@
 #include "shell.h"
 
-int main() {
-    return runshell();
+int main(void)
+{
+	return runshell();
 }

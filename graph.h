@@ -4,8 +4,8 @@
 #define MAXVERTEX 100
 
 typedef struct Graph {
-        int edges[MAXVERTEX][MAXVERTEX];
-        int start;
+	int edges[MAXVERTEX][MAXVERTEX];
+	int start;
 } Graph;
 
 void initgraph(Graph *g);
