@@ -2,7 +2,7 @@
 #include <string.h>
 #include "queue.h"
 
-void initqueue(Queue *q)
+void initqueue(struct Queue *q)
 {
 	int i;
 
@@ -13,7 +13,7 @@ void initqueue(Queue *q)
 	q->size = 0;
 }
 
-void clearqueue(Queue *q)
+void clearqueue(struct Queue *q)
 {
 	int i;
 
@@ -28,7 +28,7 @@ void clearqueue(Queue *q)
 	q->size = 0;
 }
 
-int enqueue(Queue *q, char *str)
+int enqueue(struct Queue *q, char *str)
 {
 	size_t len;
 
@@ -43,7 +43,7 @@ int enqueue(Queue *q, char *str)
 	return ++q->size;
 }
 
-int dequeue(Queue *q)
+int dequeue(struct Queue *q)
 {
 	if (q->size == 0)
 		return -1;
@@ -53,19 +53,19 @@ int dequeue(Queue *q)
 	return --q->size;
 }
 
-char *queryqueue(const Queue *q, int index)
+char *queryqueue(const struct Queue *q, int index)
 {
 	if (index >= q->size || index < 0)
 		return NULL;
 	return q->pool[(q->start + index) % (MAXLENGTH + 1)];
 }
 
-int queuesize(const Queue *q)
+int queuesize(const struct Queue *q)
 {
 	return q->size;
 }
 
-int queuefull(const Queue *q)
+int queuefull(const struct Queue *q)
 {
 	return q->size == MAXLENGTH;
 }

@@ -1,6 +1,6 @@
 #include "graph.h"
 
-void initgraph(Graph *g)
+void initgraph(struct Graph *g)
 {
 	int i, j;
 
@@ -11,12 +11,12 @@ void initgraph(Graph *g)
 	g->start = 0;
 }
 
-void cleargraph(Graph *g)
+void cleargraph(struct Graph *g)
 {
 	initgraph(g);
 }
 
-void shiftvertex(Graph *g)
+void shiftvertex(struct Graph *g)
 {
 	int i;
 
@@ -25,14 +25,14 @@ void shiftvertex(Graph *g)
 	g->start = (g->start + 1) % MAXVERTEX;
 }
 
-void setedge(Graph *g, int from, int to)
+void setedge(struct Graph *g, int from, int to)
 {
 	if (from < 0 || from >= MAXVERTEX || to < 0 || to >= MAXVERTEX)
 		return;
 	g->edges[(g->start + from) % MAXVERTEX][to] = 1;
 }
 
-void dfs(const Graph *g, int *flag, int vertex, int *cycle)
+void dfs(const struct Graph *g, int *flag, int vertex, int *cycle)
 {
 	int i;
 
@@ -48,7 +48,7 @@ void dfs(const Graph *g, int *flag, int vertex, int *cycle)
 	flag[(g->start + vertex) % MAXVERTEX] = 0;
 }
 
-int checkcycle(const Graph *g, int vertex)
+int checkcycle(const struct Graph *g, int vertex)
 {
 	if (vertex < 0 || vertex >= MAXVERTEX)
 		return 0;

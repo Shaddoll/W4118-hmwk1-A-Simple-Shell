@@ -8,8 +8,8 @@
 #include "graph.h"
 #include "shell.h"
 
-Queue g_Hist;
-Graph g_Edge;
+struct Queue g_Hist;
+struct Graph g_Edge;
 int g_Switch;
 
 int runshell(void)
@@ -101,16 +101,6 @@ int parsecommand(char *line, char ***commands, size_t *num)
 		if (*q == '|') {
 			++n;
 			(*commands)[i++] = NULL;
-			if (i >= *num - 1) {
-				char **temp;
-
-				temp = realloc(*commands, *num * 2 * sizeof(char **));
-				if (temp == NULL)
-					return -1;
-				memset(temp + *num, 0, *num * sizeof(char **));
-				*commands = temp;
-				*num *= 2;
-			}
 			p = q + 1;
 			while (*p == ' ')
 				++p;
@@ -118,6 +108,16 @@ int parsecommand(char *line, char ***commands, size_t *num)
 				logerror(syntaxerr);
 				return -1;
 			}
+		}
+		if (i >= *num - 1) {
+			char **temp;
+
+			temp = realloc(*commands, *num * 2 * sizeof(char **));
+			if (temp == NULL)
+				return -1;
+			memset(temp + *num, 0, *num * sizeof(char **));
+			*commands = temp;
+			*num *= 2;
 		}
 	}
 	if (i > 0)
@@ -257,8 +257,6 @@ void removerecursion(char **commands, int n_pipe)
 
 	while (cmd < n_pipe) {
 		if (strcmp(commands[idx], "history") == 0) {
-			//if (commands[idx + 1] && strcmp(commands[idx + 1], "-c") == 0)
-			//	return;
 			offset = str2number(commands[idx + 1]);
 			setedge(&g_Edge, vertex, offset);
 			if (offset >= 0 && checkcycle(&g_Edge, offset))
