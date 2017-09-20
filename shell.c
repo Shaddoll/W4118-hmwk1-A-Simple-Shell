@@ -5,12 +5,11 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include "queue.h"
-#include "graph.h"
 #include "shell.h"
 
 struct Queue g_Hist;
-struct Graph g_Edge;
 int g_Switch;
+int g_Record[MAXLENGTH];
 
 int runshell(void)
 {
@@ -25,7 +24,6 @@ int runshell(void)
 	}
 	memset(commands, 0, num * sizeof(char *));
 	initqueue(&g_Hist);
-	initgraph(&g_Edge);
 	g_Switch = 1;
 	while (g_Switch) {
 		ssize_t n_read;
@@ -38,13 +36,14 @@ int runshell(void)
 			updatehistory(line);
 		n_pipe = parsecommand(line, &commands, &num);
 		if (n_pipe > 0) {
-			removerecursion(commands, n_pipe);
+			g_Record[queuesize(&g_Hist) - 1] = 1;
 			concurrentpipe(commands, n_pipe, 1);
 		}
 		for (i = 0; i < num; ++i) {
 			free(commands[i]);
 			commands[i] = NULL;
 		}
+		memset(g_Record, 0, MAXLENGTH * sizeof(int));
 	}
 	free(line);
 	free(commands);
@@ -214,8 +213,13 @@ void history(char **argv, int outfd)
 		}
 	} else if (strcmp(argv[1], "-c") == 0) {
 		clearqueue(&g_Hist);
-		cleargraph(&g_Edge);
+		memset(g_Record, 0, MAXLENGTH * sizeof(int));
 	} else if (offset >= 0) {
+		if (g_Record[offset]) {
+			logerror("cycle recursion detected");
+			return;
+		}
+		g_Record[offset] = 1;
 		char *item = queryqueue(&g_Hist, offset);
 
 		if (item == NULL) {
@@ -248,33 +252,10 @@ void history(char **argv, int outfd)
 	}
 }
 
-void removerecursion(char **commands, int n_pipe)
-{
-	int cmd = 0;
-	int idx = 0;
-	int offset = -1;
-	int vertex = queuesize(&g_Hist) - 1;
-
-	while (cmd < n_pipe) {
-		if (strcmp(commands[idx], "history") == 0) {
-			offset = str2number(commands[idx + 1]);
-			setedge(&g_Edge, vertex, offset);
-			if (offset >= 0 && checkcycle(&g_Edge, offset))
-				commands[idx + 1][0] = '\0';
-		}
-		while (commands[idx] != NULL)
-			++idx;
-		++idx;
-		++cmd;
-	}
-}
-
 void updatehistory(char *str)
 {
-	if (queuefull(&g_Hist)) {
+	if (queuefull(&g_Hist))
 		dequeue(&g_Hist);
-		shiftvertex(&g_Edge);
-	}
 	enqueue(&g_Hist, str);
 }
 
