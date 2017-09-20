@@ -131,8 +131,12 @@ Shell design description:
 	looks like the below.
 	0 /bin/rm a | history 3 | /bin/rm b
 	1 /bin/rm c | history 0 | /bin/rm d
-	2 /usr/bin/touch a | /usr/bin/touch b | /usr/bin/touch c | /usr/bin/touch d | /usr/bin/touch e | /usr/bin/touch f
-	3 /bin/rm e | history 1 | /bin/rm f
-	When the 3rd command is executed, it certainly has a loop. But the side effect commands have to be executed.
-	Thus if we expand the 3rd command, it will be `/bin/rm e | /bin/rm c | /bin/rm a | history 3 | /bin/rm b | /bin/rm d | /bin/rm f`.
-	And when the pipe meet `history 3` it will skip it, print an error message and continue to execute other commands.
+	2 /usr/bin/touch a | /usr/bin/touch b | /usr/bin/touch c | /usr/bin/touch d
+	| /usr/bin/touch e | /usr/bin/touch f
+	3 /bin/rm e | history 1 | /bin/rm f | history 0
+	When the 3rd command is executed, it certainly has a loop. But the side effect commands have to
+	be executed. Thus if we expand the 3rd command, it will be `/bin/rm e | /bin/rm c | /bin/rm a |
+	history 3 | /bin/rm b | /bin/rm d | /bin/rm f | /bin/rm a | history 3 | /bin/rm b`.
+	And when the pipe meet `history 3` it will skip it, print an error message and continue to
+	execute other commands. The files `a b c d e f` will be removed, and two error messages will
+	be printed because `a` and `b` are removed twice.

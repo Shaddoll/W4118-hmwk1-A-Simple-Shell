@@ -224,6 +224,7 @@ void history(char **argv, int outfd)
 
 		if (item == NULL) {
 			logerror("event not found");
+			g_Record[offset] = 0;
 			return;
 		}
 		size_t num = 5;
@@ -231,6 +232,7 @@ void history(char **argv, int outfd)
 
 		if (commands == NULL) {
 			logerror(strerror(errno));
+			g_Record[offset] = 0;
 			return;
 		}
 		memset(commands, 0, num * sizeof(char *));
@@ -245,6 +247,7 @@ void history(char **argv, int outfd)
 			commands[i] = NULL;
 		}
 		free(commands);
+		//g_Record[offset] = 0;
 	} else if (argv[1][0] == '\0') {
 		logerror("event cause infinite recursion");
 	} else {
