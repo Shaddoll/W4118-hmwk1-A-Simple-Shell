@@ -102,14 +102,15 @@ Shell design description:
 	Commands that have syntax error:
 	1. commands start with '|', e.g: `   | /bin/ls | cd ..`;
 	2. commands end with '|', e.g: `/bin/ls |   `;
-	3. commands that have two or more neighboring '|', e.g: `/bin/ls || /usr/bin/wc`, `/bin/ls |   | /usr/bin/wc`.
+	3. commands that have two or more neighboring '|', e.g: `/bin/ls || /usr/bin/wc`,
+	`/bin/ls |   | /usr/bin/wc`.
 
 	History update:
 	Commands are updated before their execution.
 
 	Built-in commands' parameter:
-	If a user input more parameters than the commands' need, the extra parameters will be ignored.
-	e.g: history -c 0, will clear out history list and it won't execute 0-th command.
+	If a user input more parameters than the commands' need, the extra parameters will be 
+	ignored. e.g: history -c 0, will clear out history list and it won't execute 0-th command.
 	cd /bin /usr will change directory to /bin, not /usr.
 
 	History offset:
@@ -120,23 +121,23 @@ Shell design description:
 	Commands that are piped and are not built-in commands run concurrently (though they may not
 	start at the same time).
 	e.g: `/usr/bin/wc | /bin/ls`, the 2nd command will not be blocked by the 1st command.
-	However, commands that involve built-in commands have some order, because built-in commands
-	are not forked.
-	e.g: `/bin/ls | cd .. | cd /usr | /bin/echo hello`, `cd ..` is executed before `cd /usr` which is
-	executed before `/bin/echo hello`. But `/bin/ls` and the other 3 commands may run concurrently,
-	although it starts early.
+	However, commands that involve built-in commands have some order, because built-in
+	commands are not forked.
+	e.g: `/bin/ls | cd .. | cd /usr | /bin/echo hello`, `cd ..` is executed before `cd /usr`
+	which is executed before `/bin/echo hello`. But `/bin/ls` and the other 3 commands may
+	run concurrently, although it starts early.
 
 	History loop:
-	History offset commands may cause some loop, so it must be detected elegantly. If the history
-	looks like the below.
+	History offset commands may cause some loop, so it must be detected elegantly. If the
+	history looks like the below.
 	0 /bin/rm a | history 3 | /bin/rm b
 	1 /bin/rm c | history 0 | /bin/rm d
 	2 /usr/bin/touch a | /usr/bin/touch b | /usr/bin/touch c | /usr/bin/touch d
 	| /usr/bin/touch e | /usr/bin/touch f
 	3 /bin/rm e | history 1 | /bin/rm f | history 0
-	When the 3rd command is executed, it certainly has a loop. But the side effect commands have to
-	be executed. Thus if we expand the 3rd command, it will be `/bin/rm e | /bin/rm c | /bin/rm a |
-	history 3 | /bin/rm b | /bin/rm d | /bin/rm f | /bin/rm a | history 3 | /bin/rm b`.
-	And when the pipe meet `history 3` it will skip it, print an error message and continue to
-	execute other commands. The files `a b c d e f` will be removed, and two error messages will
-	be printed because `a` and `b` are removed twice.
+	When the 3rd command is executed, it certainly has a loop. But the side effect commands
+	have to be executed. Thus if we expand the 3rd command, it will be `/bin/rm e |
+	/bin/rm c | /bin/rm a | history 3 | /bin/rm b | /bin/rm d | /bin/rm f | /bin/rm a |
+	history 3 | /bin/rm b`. And when the pipe meet `history 3` it will skip it, print an
+	error message and continue to execute other commands. The files `a b c d e f` will
+	be removed, and two error messages will be printed because `a` and `b` are removed twice.
