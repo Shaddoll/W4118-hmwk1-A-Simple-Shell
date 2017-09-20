@@ -32,18 +32,14 @@ int runshell(void)
 		int n_pipe, i;
 
 		n_read = getcommand(&line, &len);
-		if (n_read < 0) { // error
-			//logerror(strerror(errno));
+		if (n_read < 0)
 			break;
-		}
 		if (n_read > 0 && line[0] != '\n')
 			updatehistory(line);
 		n_pipe = parsecommand(line, &commands, &num);
 		if (n_pipe > 0) {
-			if (checkrecursion(commands, n_pipe))
-				logerror("infinite recursion");
-			else
-				concurrentpipe(commands, n_pipe, 1);
+			removerecursion(commands, n_pipe);
+			concurrentpipe(commands, n_pipe, 1);
 		}
 		for (i = 0; i < num; ++i) {
 			free(commands[i]);
@@ -129,83 +125,15 @@ int parsecommand(char *line, char ***commands, size_t *num)
 	return n;
 }
 
-int eval(char **commands, int infd, int outfd, pid_t *pid) {
-	if (strcmp(commands[0], "cd") == 0) {
-		if (commands[1] == NULL)
-			logerror("no arguemnt");
-		else if (chdir(commands[1]) < 0)
-			logerror(strerror(errno));
-	} else if (strcmp(commands[0], "exit") == 0) {
-		g_Switch = 0;
-	} else if (strcmp(commands[0], "history") == 0) {
-		history(commands, outfd);
-	} else {
-		*pid = fork();
-		if (*pid < 0) {
-			logerror(strerror(errno));
-		}
-		else if (*pid == 0) {
-			dup2(outfd, 1);
-			dup2(infd, 0);
-			execv(commands[0], commands);
-			logerror(strerror(errno));
-			g_Switch = 0;
-		}
-		return *pid;
-	}
-	return 0;
-}
-
 void concurrentpipe(char **commands, int n_pipe, int outfd)
 {
-	pid_t pid = 0;
 	int cmd = 0;
 	int idx = 0;
-	int n_children = 0;
 	int i;
-	int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
-
-	if (pipefd == NULL) {
-		logerror(strerror(errno));
-		return;
-	}
-	for (i = 0; i < n_pipe - 1; ++i)
-		pipe(pipefd + 2 * i);
-	while (cmd < n_pipe && g_Switch) {
-		int output = outfd;
-		int input = 0;
-		if (cmd < n_pipe - 1)
-			output = pipefd[cmd * 2 + 1];
-		if (cmd > 0)
-			input = pipefd[(cmd - 1) * 2];
-		if (eval(commands + idx, input, output, &pid) > 0)
-			++n_children;
-		while (commands[idx] != NULL)
-			++idx;
-		++idx;
-		++cmd;
-	}
-	for (i = 0; i < (n_pipe - 1) * 2; ++i)
-		close(pipefd[i]);
-	free(pipefd);
-	pipefd = NULL;
-	if (pid == 0)
-		return;
-	for (i = 0; i < n_children; ++i) {
-		if (wait(0) < 0)
-			logerror(strerror(errno));
-	}
-}
-
-void concurrentpipe2(char **commands, int n_pipe, int outfd)
-{
-	int cmd = 0;
-	int idx = 0;
-	int i, status;
 	pid_t *pids;
 	int *pipefd = malloc((n_pipe - 1) * 2 * sizeof(int));
 
-	if (pipefd == NULL) {
+	if (pipefd == NULL && n_pipe != 1) {
 		logerror(strerror(errno));
 		return;
 	}
@@ -219,34 +147,28 @@ void concurrentpipe2(char **commands, int n_pipe, int outfd)
 	}
 	memset(pids, 0, n_pipe * sizeof(pid_t));
 	while (cmd < n_pipe) {
+		int output = cmd < n_pipe - 1 ? pipefd[cmd * 2 + 1] : outfd;
+		int input = cmd > 0 ? pipefd[(cmd - 1) * 2] : 0;
+
 		if (strcmp(commands[idx], "cd") == 0) {
-			if (commands[idx + 1]) {
-				if (chdir(commands[idx + 1]) < 0)
-					logerror(strerror(errno));
-			} else {
+			if (commands[idx + 1] == NULL)
 				logerror("no argument");
-			}
+			else if (chdir(commands[idx + 1]) < 0)
+				logerror(strerror(errno));
 		} else if (strcmp(commands[idx], "exit") == 0) {
 			g_Switch = 0;
 			free(pipefd);
 			free(pids);
 			return;
 		} else if (strcmp(commands[idx], "history") == 0) {
-			if (cmd < n_pipe - 1)
-				history(commands + idx, pipefd[2 * cmd + 1]);
-			else
-				history(commands + idx, outfd);
+			history(commands + idx, output);
 		} else {
 			pids[cmd] = fork();
 			if (pids[cmd] < 0)
 				logerror(strerror(errno));
-			else if (pids[cmd] == 0) { // child process
-				if (cmd < n_pipe - 1)
-					dup2(pipefd[cmd * 2 + 1], 1);
-				else
-					dup2(outfd, 1);
-				if (cmd > 0)
-					dup2(pipefd[(cmd - 1) * 2], 0);
+			else if (pids[cmd] == 0) {
+				dup2(output, 1);
+				dup2(input, 0);
 				for (i = 0; i < 2 * (n_pipe - 1); ++i)
 					close(pipefd[i]);
 				if (execv(commands[idx], commands + idx) < 0) {
@@ -268,9 +190,7 @@ void concurrentpipe2(char **commands, int n_pipe, int outfd)
 	free(pipefd);
 	pipefd = NULL;
 	for (i = 0; i < n_pipe; ++i) {
-		//if (pids[i] > 0 && waitpid(pids[i], &status, 0) < 0)
-		//	logerror(strerror(errno));
-		if (pids[i] > 0 && wait(NULL) < 0)
+		if (pids[i] > 0 && waitpid(pids[i], NULL, 0) < 0)
 			logerror(strerror(errno));
 	}
 	free(pids);
@@ -321,29 +241,34 @@ void history(char **argv, int outfd)
 			commands[i] = NULL;
 		}
 		free(commands);
+	} else if (argv[1][0] == '\0') {
+		logerror("event cause infinite recursion");
 	} else {
 		logerror("invalid argument");
 	}
 }
 
-int checkrecursion(char **commands, int n_pipe)
+void removerecursion(char **commands, int n_pipe)
 {
-	int vertex = queuesize(&g_Hist) - 1;
 	int cmd = 0;
 	int idx = 0;
-	int offset;
+	int offset = -1;
+	int vertex = queuesize(&g_Hist) - 1;
 
 	while (cmd < n_pipe) {
 		if (strcmp(commands[idx], "history") == 0) {
+			//if (commands[idx + 1] && strcmp(commands[idx + 1], "-c") == 0)
+			//	return;
 			offset = str2number(commands[idx + 1]);
 			setedge(&g_Edge, vertex, offset);
+			if (offset >= 0 && checkcycle(&g_Edge, offset))
+				commands[idx + 1][0] = '\0';
 		}
 		while (commands[idx] != NULL)
 			++idx;
 		++idx;
 		++cmd;
 	}
-	return checkcycle(&g_Edge, vertex);
 }
 
 void updatehistory(char *str)
@@ -357,7 +282,7 @@ void updatehistory(char *str)
 
 int str2number(char *str)
 {
-	if (str == NULL)
+	if (str == NULL || strlen(str) == 0)
 		return -1;
 	int num = 0;
 	char *p;

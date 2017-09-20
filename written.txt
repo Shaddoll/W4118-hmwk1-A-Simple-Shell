@@ -1,5 +1,83 @@
-Your Name
-Your Uni
+Zijian Chen
+zc2386
 W4118 Homework 1
 
 ** Your answers to the written assignment here **
+
+1.4
+Should: We can view the operating system as everything the vendors inlude in it.
+And some vendors include web servers and mail programs in their operating systems.
+Those applications can be viewed as a feature of operating system. Thus they are
+part of operating system.
+
+Should not: When we mention operating system, what we care about is its kernel. It's
+a program that manages the resources of a computer and run all times on the computer.
+Application programs run based on operating system, and they don't manage resources and
+hardwares of a computer system. So web browers and mail programs should not be considered
+as part of operating system.
+
+1.6:
+Set value of timer. Yes.
+Read the clock. No.
+Clear memory. Yes.
+Issue a trap instruction. Yes.
+Turn off interrupts. Yes.
+Modify entries in device-status table. Yes.
+Switch from user to kernel mode. Yes.
+Access I/O device. Yes.
+
+1.13:
+Mainframe or minicomputer systems: CPU time, memory and I/O.
+Workstations connected to servers: Networking, disk space, external devices.
+Mobile computers: Power, I/O.
+
+1.19:
+Interrupts are to let the CPU stops what it is doing and handle some event.
+
+An interrupt can be hardware of software, whereas a trap is a software-generated
+interrupt caused by an error, or by a specific request from a user program that an
+os service be performed.
+
+It can be generated intentionally by a user program to request some operating system service.
+
+1.21:
+Not possible: Some operating systems could do harm to the operating system, so we shouldn't let user
+programs to execute them. Thus they should only be executed by the operating system. So we have to
+differentiate them. So we need the privileged mode to let the operating system to execute those operations
+and not allow user programs to execute them.
+
+Possible: We could limit the instructions that a user's program use when a user compile a program.
+Make sure the compiler don't generate privileged instructions when compiling a user program. But a
+bad user may modify the binary code of the user program, so we may let the operating system to scan
+the binary code before executing a user program.
+
+2.1:
+To provide services to programs and users of the programs and make programming easier.
+
+2.12:
+The first category is the services that are helpful to the user. It includes user interface, program execution,
+I/O operations, File-system manipulation, Communications and Error detection.
+The other category is services for ensuring the efficient operation of system itself, which includes resource
+allocation, accounting and protection and security.
+Their difference are the purpose of existence and their service target.
+
+2.16:
+Advantages: It provides a higher-level abstraction of manipulating files and devices. By treating devices
+as files, it makes easier for developers to write programs dealing with files and devices.
+
+Disadvantages: The high-level abstraction can cause confusing, because users cannot know whether they are
+dealing with files or devices from the system call they're using. And high-level abstraction also lose some
+control over some particular devices that may be treated specially. And mapping devices to files also add more
+work to the operating system.
+
+2.18:
+Message passing and shared memory.
+Message passing is easier to implement and there are no memory accessing conflicts. It is useful for
+exchanging small amounts of data and easier to be extended to distributed systems. However, it's slower
+and not useful for exchanging large amounts of data.
+
+Shared memory is much faster and thus useful for transmitting large amounts of data. But it's hard to implemen,
+because programmers have to manage the shared memory manually.
+
+2.24: Because Google modify the JVM to optimize for mobile devices with limited memory and CPU processing
+capabilities. Thus they have to provide new API to support the optimized JVM.

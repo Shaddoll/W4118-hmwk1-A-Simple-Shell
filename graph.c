@@ -50,6 +50,8 @@ void dfs(const Graph *g, int *flag, int vertex, int *cycle)
 
 int checkcycle(const Graph *g, int vertex)
 {
+	if (vertex < 0 || vertex >= MAXVERTEX)
+		return 0;
 	int cycle = 0;
 	int flag[MAXVERTEX] = {0};
 

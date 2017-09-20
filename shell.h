@@ -9,7 +9,7 @@ int executecommand(char **commands, int pipe);
 int executepipe(char **commands, int n_pipe, int outfd);
 void concurrentpipe(char **commands, int n_pipe, int outfd);
 void history(char **argv, int fd);
-int checkrecursion(char **commands, int n_pipe);
+void removerecursion(char **commands, int n_pipe);
 void updatehistory(char *str);
 int str2number(char *str);
 int logerror(char *str);
