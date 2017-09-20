@@ -118,8 +118,8 @@ Shell design description:
 	e.g: `history 0001`, `history 1` are all valid. `history +1`, `history 0x1` are invalid.
 
 	Pipes:
-	Commands that are piped and are not built-in commands run concurrently (though they may not
-	start at the same time).
+	Commands that are piped and are not built-in commands run concurrently (though they may
+	not start at the same time).
 	e.g: `/usr/bin/wc | /bin/ls`, the 2nd command will not be blocked by the 1st command.
 	However, commands that involve built-in commands have some order, because built-in
 	commands are not forked.
@@ -141,3 +141,8 @@ Shell design description:
 	history 3 | /bin/rm b`. And when the pipe meet `history 3` it will skip it, print an
 	error message and continue to execute other commands. The files `a b c d e f` will
 	be removed, and two error messages will be printed because `a` and `b` are removed twice.
+
+References:
+	1. usage of dup2 and pipe: http://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html
+	2. BSD Library Functions Manual of `getline`, `waitpid`, `fork`, `exec`, `pipe`, `dup2`
+	   and so on.

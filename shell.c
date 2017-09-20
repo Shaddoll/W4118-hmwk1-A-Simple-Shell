@@ -247,9 +247,7 @@ void history(char **argv, int outfd)
 			commands[i] = NULL;
 		}
 		free(commands);
-		//g_Record[offset] = 0;
-	} else if (argv[1][0] == '\0') {
-		logerror("event cause infinite recursion");
+		g_Record[offset] = 0;
 	} else {
 		logerror("invalid argument");
 	}
