@@ -3,3 +3,136 @@ HW 1 W4118
 
 ** Document each file discussing assumptions and design choices
    include citations for ALL sources consulted **
+
+queue.h, queue.c:
+	Declare struct Queue and some functions to deal with the struct.
+	struct Queue is used as the data structure--queue, and is implemented
+	with an array that can only store at most 100 items. The Queue is used
+	to store history commands.
+
+	void initqueue(struct Queue *);
+	This function is used to initialize the history queue.
+
+	void clearqueue(struct Queue *);
+	This function is used when `history -c` is executed. It will clear out
+	the queue.
+
+	int enqueue(struct Queue *, char *);
+	Push a command into the queue, and return the size of the queue. If the
+	queue is full, do nothing but return -1.
+
+	int dequeue(struct Queue *);
+	Remove the front item from the queue, and return the size of the queue.
+	If the queue is empty, do nothing but return -1.
+
+	char *queryqueue(const struct Queue *, int);
+	Return the i-th command string. If not exist, return NULL.
+
+	int queuesize(const struct Queue *);
+	Return the size of the queue.
+
+	int queuefull(const struct Queue *);
+	If the queue is full, return 1, else return 0.
+
+shell.h, shell.c:
+	int str2number(char *);
+	Check if all the characters in the string are all '0' - '9'. If so, convert
+	it to a number and return it. If the pointer is NULL or the string is empty
+	or it has non-digit characters, then return -1.
+
+	int logerror(char *);
+	Print the error string to the standard error output.
+
+	void updatehistory(char *);
+	If the history queue is full, then remove the first item. Then push the new
+	command into the end of the queue.
+
+	void history(char **, int);
+	This function executes the `history` command according to the parameter. And
+	it print the result to the given file descriptor.
+	If it has no argument, then it just print all the stored commands. If it has one
+	or more arguments, then it just take the first argument and ignore others.
+	If the first argument is "-c", then it will clear the stored commands.
+	If the first argument is some number, then it will find the corresponding command
+	in the queue and execute it. If not found, it will print an error message to the
+	standard output and return. When executing `history [offset]`, it will check if the
+	`offset` has been met before to detect the history loop.
+	If the argument is not any of the above, then it is treated as an invalid argument and
+	the function will print an error message and return.
+
+	ssize_t getcommand(char **, size_t *);
+	Print a '$', and wait for user's input until '\n'. If it met EOF or failed, it will
+	return -1. Otherwise, it returns the number of characters.
+
+	int parsecommand(char *line, char ***commands, size_t *num);
+	The functions is used to parse users' input command, and the parsed result will be
+	stored at the address of the 2nd paramenter, and the 3rd parameter is the number of
+	allocated array size of the 2nd parameter's array. It will return the number of commands
+	to be executed. If the input has some syntax error, it will return -1. If the user just
+	input some spaces or does not input anything, it will return 0.
+
+	void concurrentpipe(char **commands, int n_pipe, int outfd);
+	The function executes commands and write the output to the given output file descriptor.
+	If it is a command without pipe, then n_pipe is 0. If not, n_pipe is the number of pipes.
+	The commands has the following format.
+	/* format of commands */
+	0 -> cmd0 argv[0]
+	1 -> cmd0 argv[1]
+	................
+	k -> cmd0 argv[k]
+	k + 1 -> NULL
+	k + 2 cmd1 argv[0]
+	k + 3 cmd2 argv[1]
+	.................
+	N     cmdn argv[0]
+	N + 1 cmdn argv[1]
+	.................
+	N + k cmdn argv[k]
+	N + k + 1 NULL
+	/* end of format */
+	Thus each command and its arguments are stored in the array form. And different arguments
+	are separated by NULL pointer.
+
+Shell design description:
+	History storage:
+	The shell stores all the original input commands, including those cannot
+	be parsed and those only contain spaces like '     '. But it will not store empty string,
+	which means if a user don't put anything and just press Enter, the history is not updated.
+
+	Commands that have syntax error:
+	1. commands start with '|', e.g: `   | /bin/ls | cd ..`;
+	2. commands end with '|', e.g: `/bin/ls |   `;
+	3. commands that have two or more neighboring '|', e.g: `/bin/ls || /usr/bin/wc`, `/bin/ls |   | /usr/bin/wc`.
+
+	History update:
+	Commands are updated before their execution.
+
+	Built-in commands' parameter:
+	If a user input more parameters than the commands' need, the extra parameters will be ignored.
+	e.g: history -c 0, will clear out history list and it won't execute 0-th command.
+	cd /bin /usr will change directory to /bin, not /usr.
+
+	History offset:
+	The offset is valid if it's a string that only contains characters between '0' and '9'.
+	e.g: `history 0001`, `history 1` are all valid. `history +1`, `history 0x1` are invalid.
+
+	Pipes:
+	Commands that are piped and are not built-in commands run concurrently (though they may not
+	start at the same time).
+	e.g: `/usr/bin/wc | /bin/ls`, the 2nd command will not be blocked by the 1st command.
+	However, commands that involve built-in commands have some order, because built-in commands
+	are not forked.
+	e.g: `/bin/ls | cd .. | cd /usr | /bin/echo hello`, `cd ..` is executed before `cd /usr` which is
+	executed before `/bin/echo hello`. But `/bin/ls` and the other 3 commands may run concurrently,
+	although it starts early.
+
+	History loop:
+	History offset commands may cause some loop, so it must be detected elegantly. If the history
+	looks like the below.
+	0 /bin/rm a | history 3 | /bin/rm b
+	1 /bin/rm c | history 0 | /bin/rm d
+	2 /usr/bin/touch a | /usr/bin/touch b | /usr/bin/touch c | /usr/bin/touch d | /usr/bin/touch e | /usr/bin/touch f
+	3 /bin/rm e | history 1 | /bin/rm f
+	When the 3rd command is executed, it certainly has a loop. But the side effect commands have to be executed.
+	Thus if we expand the 3rd command, it will be `/bin/rm e | /bin/rm c | /bin/rm a | history 3 | /bin/rm b | /bin/rm d | /bin/rm f`.
+	And when the pipe meet `history 3` it will skip it, print an error message and continue to execute other commands.
