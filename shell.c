@@ -124,6 +124,15 @@ int parsecommand(char *line, char ***commands, size_t *num)
 	return n;
 }
 
+/* Execute the pipe command. */
+/* commands stores the arguments of commands in the pipe */
+/* n_pipe is the number of commands in the pipe */
+/* outfd redirect the output of the command */
+/* infd redirect the input of the command */
+/* if infd is a pipefd, cfd is the fd that writes to infd */
+/* Note: infd, cfd and outfd are used by history command */
+/* infd is used by `history offset` to receive input from pipe */
+/* cfd is used to close the pipe corresponding to infd */
 void concurrentpipe(char **commands, int n_pipe, int outfd, int infd, int cfd)
 {
 	int cmd = 0;
@@ -187,6 +196,9 @@ void concurrentpipe(char **commands, int n_pipe, int outfd, int infd, int cfd)
 		++idx;
 		++cmd;
 	}
+	/* cfd is the output file descriptor that write to infd */
+	/* We hereby and in the child process close it */
+	/* to avoid child waiting input and hang forever. */
 	if (cfd > 2)
 		close(cfd);
 	for (i = 0; i < 2 * (n_pipe - 1); ++i)
@@ -201,6 +213,11 @@ void concurrentpipe(char **commands, int n_pipe, int outfd, int infd, int cfd)
 	pids = NULL;
 }
 
+/* Execute the history command. */
+/* argv stores the arguments of history command */
+/* outfd redirect the output of the command */
+/* infd redirect the input of the command */
+/* if infd is a pipefd, cfd is the fd that writes to infd */
 void history(char **argv, int outfd, int infd, int cfd)
 {
 	int offset = str2number(argv[1]);
@@ -280,7 +297,7 @@ int str2number(char *str)
 	return num;
 }
 
-int logerror(char *str)
+void logerror(char *str)
 {
-	return fprintf(stderr, "error: %s\n", str);
+	fprintf(stderr, "error: %s\n", str);
 }

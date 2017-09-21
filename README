@@ -143,8 +143,8 @@ Shell design description:
 	be removed, and two error messages will be printed because `a` and `b` are removed twice.
 
 Exception:
-	There are some test cases generate different results when test manually and run in the script.
-	Please read the homework_tests.py.
+	There are some test cases generate different results when test manually and run in the
+	script. Please read the homework_tests.py.
 
 References:
 	1. usage of dup2 and pipe: http://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html

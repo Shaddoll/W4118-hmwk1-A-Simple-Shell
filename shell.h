@@ -9,6 +9,6 @@ void concurrentpipe(char **commands, int n_pipe, int outfd, int infd, int cfd);
 void history(char **argv, int outfd, int infd, int cfd);
 void updatehistory(char *str);
 int str2number(char *str);
-int logerror(char *str);
+void logerror(char *str);
 
 #endif
