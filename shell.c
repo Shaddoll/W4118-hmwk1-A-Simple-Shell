@@ -37,7 +37,7 @@ int runshell(void)
 		n_pipe = parsecommand(line, &commands, &num);
 		if (n_pipe > 0) {
 			g_Record[queuesize(&g_Hist) - 1] = 1;
-			concurrentpipe(commands, n_pipe, 1);
+			concurrentpipe(commands, n_pipe, 1, 0, -1);
 		}
 		for (i = 0; i < num; ++i) {
 			free(commands[i]);
@@ -124,7 +124,7 @@ int parsecommand(char *line, char ***commands, size_t *num)
 	return n;
 }
 
-void concurrentpipe(char **commands, int n_pipe, int outfd)
+void concurrentpipe(char **commands, int n_pipe, int outfd, int infd, int cfd)
 {
 	int cmd = 0;
 	int idx = 0;
@@ -147,7 +147,8 @@ void concurrentpipe(char **commands, int n_pipe, int outfd)
 	memset(pids, 0, n_pipe * sizeof(pid_t));
 	while (cmd < n_pipe) {
 		int output = cmd < n_pipe - 1 ? pipefd[cmd * 2 + 1] : outfd;
-		int input = cmd > 0 ? pipefd[(cmd - 1) * 2] : 0;
+		int input = cmd > 0 ? pipefd[(cmd - 1) * 2] : infd;
+		int cput = cmd > 0 ? pipefd[(cmd - 1) * 2 + 1] : cfd;
 
 		if (strcmp(commands[idx], "cd") == 0) {
 			if (commands[idx + 1] == NULL)
@@ -160,7 +161,7 @@ void concurrentpipe(char **commands, int n_pipe, int outfd)
 			free(pids);
 			return;
 		} else if (strcmp(commands[idx], "history") == 0) {
-			history(commands + idx, output);
+			history(commands + idx, output, input, cput);
 		} else {
 			pids[cmd] = fork();
 			if (pids[cmd] < 0)
@@ -168,6 +169,8 @@ void concurrentpipe(char **commands, int n_pipe, int outfd)
 			else if (pids[cmd] == 0) {
 				dup2(output, 1);
 				dup2(input, 0);
+				if (cfd > 2)
+					close(cfd);
 				for (i = 0; i < 2 * (n_pipe - 1); ++i)
 					close(pipefd[i]);
 				if (execv(commands[idx], commands + idx) < 0) {
@@ -184,6 +187,8 @@ void concurrentpipe(char **commands, int n_pipe, int outfd)
 		++idx;
 		++cmd;
 	}
+	if (cfd > 2)
+		close(cfd);
 	for (i = 0; i < 2 * (n_pipe - 1); ++i)
 		close(pipefd[i]);
 	free(pipefd);
@@ -196,7 +201,7 @@ void concurrentpipe(char **commands, int n_pipe, int outfd)
 	pids = NULL;
 }
 
-void history(char **argv, int outfd)
+void history(char **argv, int outfd, int infd, int cfd)
 {
 	int offset = str2number(argv[1]);
 
@@ -239,7 +244,7 @@ void history(char **argv, int outfd)
 		int n_pipe = parsecommand(item, &commands, &num);
 
 		if (n_pipe > 0)
-			concurrentpipe(commands, n_pipe, outfd);
+			concurrentpipe(commands, n_pipe, outfd, infd, cfd);
 		int i;
 
 		for (i = 0; i < num; ++i) {
